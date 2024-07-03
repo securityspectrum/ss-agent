@@ -21,12 +21,35 @@ type Config struct {
 
 var config Config
 
+var defaultConfigPaths = []string{
+	"./config/config.json",
+	"/etc/ss-agent/config/config.json",
+	"/usr/local/etc/ss-agent/config/config.json",
+	"/usr/local/ss-agent/config/config.json",
+	"C:\\ProgramData\\ss-agent\\config\\config.json",
+}
+
+func findConfigFile() (string, error) {
+	for _, path := range defaultConfigPaths {
+		if _, err := os.Stat(path); err == nil {
+			return path, nil
+		}
+	}
+	return "", os.ErrNotExist
+}
+
 func LoadConfig() {
-	file, err := os.Open("config/config.json")
+	configPath, err := findConfigFile()
+	if err != nil {
+		log.Fatalf("Error finding config file: %v", err)
+	}
+
+	file, err := os.Open(configPath)
 	if err != nil {
 		log.Fatalf("Error opening config file: %v", err)
 	}
 	defer file.Close()
+
 	decoder := json.NewDecoder(file)
 	if err := decoder.Decode(&config); err != nil {
 		log.Fatalf("Error decoding config file: %v", err)
