@@ -43,7 +43,8 @@ func main() {
 	if debugMode {
 		log.Println("Loaded Configurations:")
 		printConfig(config.GetConfig())
-		log.Printf("OS Version: %s\n", config.GetConfig().Dist)
+		log.Printf("OS Type: %s\n", osinfo.GetOSType())
+		log.Printf("OS Distribution: %s\n", osinfo.GetOSDist())
 		log.Printf("Program Version: %s\n", version)
 	}
 

@@ -14,8 +14,6 @@ type Config struct {
 	CertFile        string `json:"cert_file"`
 	KeyFile         string `json:"key_file"`
 	CAFile          string `json:"ca_file"`
-	OS              string `json:"os"`
-	Dist            string `json:"dist"`
 	PingInterval    int    `json:"ping_interval"`
 }
 
@@ -63,9 +61,4 @@ func LoadConfig() {
 
 func GetConfig() Config {
 	return config
-}
-
-func SetOS(os, dist string) {
-	config.OS = os
-	config.Dist = dist
 }

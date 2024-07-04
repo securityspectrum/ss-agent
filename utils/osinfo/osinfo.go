@@ -7,9 +7,10 @@ import (
 	"os"
 	"runtime"
 	"strings"
-
-	"ss-agent/config"
 )
+
+var osType string
+var osDist string
 
 func getOSReleaseInfo() (map[string]string, error) {
 	file, err := os.Open("/etc/os-release")
@@ -41,18 +42,38 @@ func getOSReleaseInfo() (map[string]string, error) {
 func DetectOS() {
 	switch runtime.GOOS {
 	case "windows":
-		config.SetOS("windows", "windows")
+		osType = "windows"
+		osDist = "windows"
 	case "darwin":
-		config.SetOS("darwin", "macos")
+		osType = "darwin"
+		osDist = "macos"
 	case "linux":
 		info, err := getOSReleaseInfo()
 		if err != nil {
 			log.Fatalf("Failed to detect Linux distribution: %v", err)
 		}
-		dist := info["ID"]
-		version := info["VERSION"]
-		config.SetOS("linux", dist+" "+version)
+		osType = "linux"
+		osDist = normalizeLinuxDist(info["ID"])
 	default:
 		log.Fatalf("Unsupported operating system: %s", runtime.GOOS)
 	}
+}
+
+func normalizeLinuxDist(dist string) string {
+	switch dist {
+	case "ubuntu", "debian", "mint":
+		return dist
+	case "fedora", "rhel", "centos":
+		return dist
+	default:
+		return "unsupported"
+	}
+}
+
+func GetOSType() string {
+	return osType
+}
+
+func GetOSDist() string {
+	return osDist
 }

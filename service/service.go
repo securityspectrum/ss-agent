@@ -3,17 +3,17 @@ package service
 import (
 	"fmt"
 	"os/exec"
+	"ss-agent/utils/osinfo"
 	"strings"
-
-	"ss-agent/config"
 )
 
 func InstallService(serviceName string) error {
-	conf := config.GetConfig()
-	fmt.Printf("Installing %s on %s/%s...\n", serviceName, conf.OS, conf.Dist)
+	osType := osinfo.GetOSType()
+	osDist := osinfo.GetOSDist()
+	fmt.Printf("Installing %s on %s/%s...\n", serviceName, osType, osDist)
 	var installCmd string
 
-	switch conf.OS {
+	switch osType {
 	case "windows":
 		switch serviceName {
 		case "fluent-bit":
@@ -37,7 +37,7 @@ func InstallService(serviceName string) error {
 			return fmt.Errorf("unknown service: %s", serviceName)
 		}
 	case "linux":
-		switch conf.Dist {
+		switch osDist {
 		case "ubuntu", "debian", "mint":
 			switch serviceName {
 			case "fluent-bit":
@@ -61,10 +61,10 @@ func InstallService(serviceName string) error {
 				return fmt.Errorf("unknown service: %s", serviceName)
 			}
 		default:
-			return fmt.Errorf("unsupported distribution: %s", conf.Dist)
+			return fmt.Errorf("unsupported distribution: %s", osDist)
 		}
 	default:
-		return fmt.Errorf("unsupported operating system: %s", conf.OS)
+		return fmt.Errorf("unsupported operating system: %s", osType)
 	}
 
 	cmd := exec.Command("sh", "-c", installCmd)
@@ -72,16 +72,17 @@ func InstallService(serviceName string) error {
 	if err != nil {
 		return fmt.Errorf("failed to install %s: %v\nOutput: %s", serviceName, err, string(output))
 	}
-	fmt.Printf("%s installed successfully on %s/%s.\n", serviceName, conf.OS, conf.Dist)
+	fmt.Printf("%s installed successfully on %s/%s.\n", serviceName, osType, osDist)
 	return nil
 }
 
 func UninstallService(serviceName string) error {
-	conf := config.GetConfig()
-	fmt.Printf("Uninstalling %s on %s/%s...\n", serviceName, conf.OS, conf.Dist)
+	osType := osinfo.GetOSType()
+	osDist := osinfo.GetOSDist()
+	fmt.Printf("Uninstalling %s on %s/%s...\n", serviceName, osType, osDist)
 	var uninstallCmd string
 
-	switch conf.OS {
+	switch osType {
 	case "windows":
 		switch serviceName {
 		case "fluent-bit":
@@ -105,7 +106,7 @@ func UninstallService(serviceName string) error {
 			return fmt.Errorf("unknown service: %s", serviceName)
 		}
 	case "linux":
-		switch conf.Dist {
+		switch osDist {
 		case "ubuntu", "debian", "mint":
 			switch serviceName {
 			case "fluent-bit":
@@ -129,10 +130,10 @@ func UninstallService(serviceName string) error {
 				return fmt.Errorf("unknown service: %s", serviceName)
 			}
 		default:
-			return fmt.Errorf("unsupported distribution: %s", conf.Dist)
+			return fmt.Errorf("unsupported distribution: %s", osDist)
 		}
 	default:
-		return fmt.Errorf("unsupported operating system: %s", conf.OS)
+		return fmt.Errorf("unsupported operating system: %s", osType)
 	}
 
 	cmd := exec.Command("sh", "-c", uninstallCmd)
@@ -140,7 +141,7 @@ func UninstallService(serviceName string) error {
 	if err != nil {
 		return fmt.Errorf("failed to uninstall %s: %v\nOutput: %s", serviceName, err, string(output))
 	}
-	fmt.Printf("%s uninstalled successfully on %s/%s.\n", serviceName, conf.OS, conf.Dist)
+	fmt.Printf("%s uninstalled successfully on %s/%s.\n", serviceName, osType, osDist)
 	return nil
 }
 
