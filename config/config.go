@@ -1,7 +1,9 @@
+// config.go
 package config
 
 import (
 	"encoding/json"
+	"errors"
 	"log"
 	"os"
 )
@@ -15,6 +17,7 @@ type Config struct {
 	KeyFile         string `json:"key_file"`
 	CAFile          string `json:"ca_file"`
 	PingInterval    int    `json:"ping_interval"`
+	SkipSSLVerify   bool   `json:"skip_ssl_verify"`
 }
 
 var config Config
@@ -27,6 +30,7 @@ var defaultConfigPaths = []string{
 	"C:\\ProgramData\\ss-agent\\config\\config.json",
 }
 
+// findConfigFile searches for the configuration file in default paths
 func findConfigFile() (string, error) {
 	for _, path := range defaultConfigPaths {
 		if _, err := os.Stat(path); err == nil {
@@ -36,29 +40,40 @@ func findConfigFile() (string, error) {
 	return "", os.ErrNotExist
 }
 
-func LoadConfig() {
-	configPath, err := findConfigFile()
+// LoadConfigFromFile loads configuration from the specified file path
+func LoadConfigFromFile(filePath string) error {
+	file, err := os.Open(filePath)
 	if err != nil {
-		log.Fatalf("Error finding config file: %v", err)
-	}
-
-	file, err := os.Open(configPath)
-	if err != nil {
-		log.Fatalf("Error opening config file: %v", err)
+		return err
 	}
 	defer file.Close()
 
 	decoder := json.NewDecoder(file)
 	if err := decoder.Decode(&config); err != nil {
-		log.Fatalf("Error decoding config file: %v", err)
+		return err
 	}
 
 	// Set default ping interval if not set or invalid
 	if config.PingInterval < 5 {
 		config.PingInterval = 5
 	}
+
+	// No need to set SkipSSLVerify to false explicitly since it's already false by default
+
+	log.Println("Configuration loaded from:", filePath)
+	return nil
 }
 
+// LoadConfig attempts to load configuration from default paths
+func LoadConfig() error {
+	configPath, err := findConfigFile()
+	if err != nil {
+		return errors.New("no config file found in default paths")
+	}
+	return LoadConfigFromFile(configPath)
+}
+
+// GetConfig returns the current configuration
 func GetConfig() Config {
 	return config
 }

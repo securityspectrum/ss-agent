@@ -26,7 +26,7 @@ func Ping(client *http.Client) error {
 		return fmt.Errorf("APIUrl is not set in the configuration")
 	}
 
-	url := fmt.Sprintf("%s/ping", conf.APIUrl)
+	url := fmt.Sprintf("%s/agents/ping", conf.APIUrl)
 	log.Printf("ping %s", url)
 
 	req, err := http.NewRequest("GET", url, nil)
