@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"reflect"
 	"strconv"
 	"syscall"
@@ -50,6 +51,8 @@ func Execute(version string, ctx context.Context, cancel context.CancelFunc) {
 	// Add global flags
 	rootCmd.PersistentFlags().StringVar(&configPath, "config", "", "Path to configuration file")
 	rootCmd.PersistentFlags().BoolVar(&debugMode, "debug", false, "Enable debug mode")
+
+	osinfo.DetectOS()
 
 	// loadConfig is a PreRun hook that loads the configuration based on the --config flag
 	loadConfig := func(cmd *cobra.Command, args []string) {
@@ -286,13 +289,69 @@ func Execute(version string, ctx context.Context, cancel context.CancelFunc) {
 	}
 }
 
+// ensureLogDirectory ensures that the log directory exists and creates it if necessary
+func ensureLogDirectory(logFilePath string) error {
+	log.Println("Ensuring log directory exists: ", logFilePath)
+	logDir := filepath.Dir(logFilePath)
+	if _, err := os.Stat(logDir); os.IsNotExist(err) {
+		err := os.MkdirAll(logDir, 0755)
+		if err != nil {
+			return fmt.Errorf("failed to create log directory %s: %v", logDir, err)
+		}
+	}
+	return nil
+}
+
+func getLogFilePath() string {
+	ostype := osinfo.GetOSType()
+
+	log.Printf("Detected OS: %s\n", ostype)
+	switch ostype {
+	case "linux":
+		return "/var/log/ss-agent/ss-agent.log"
+	case "windows":
+		return `C:\ProgramData\ss-agent\ss-agent.log`
+	case "darwin": // macOS
+		return "/Library/Logs/ss-agent/ss-agent.log"
+	default:
+		// Default fallback if OS detection fails
+		return "./ss-agent.log"
+	}
+}
+
 // cmdDaemonize starts the agent as a background process
 func cmdDaemonize() {
+	// Prepare the command to rerun the current binary in "start" mode
 	cmd := exec.Command(os.Args[0], "start", "--config", configPath)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Start()
-	fmt.Printf("Agent service started in the background with PID %d\n", cmd.Process.Pid)
+
+	// Get the log file path
+	logFilePath := getLogFilePath()
+
+	// Ensure log directory exists
+	if err := ensureLogDirectory(logFilePath); err != nil {
+		log.Fatalf("Failed to ensure log directory: %v", err)
+	}
+
+	// Open or create the log file to write logs in daemon mode
+	logFile, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	if err != nil {
+		log.Fatalf("Failed to open log file: %v", err)
+	}
+	defer logFile.Close()
+
+	// Redirect stdout and stderr to the log file in daemon mode
+	cmd.Stdout = logFile
+	cmd.Stderr = logFile
+
+	// Start the process in the background
+	if err := cmd.Start(); err != nil {
+		log.Fatalf("Failed to start daemon process: %v", err)
+	}
+
+	// Output the PID to the log file instead of the console
+	log.Printf("Agent service started in the background with PID %d\n", cmd.Process.Pid)
+
+	// Exit the parent process to complete the daemonization
 	os.Exit(0)
 }
 

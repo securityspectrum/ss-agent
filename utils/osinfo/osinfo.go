@@ -57,6 +57,8 @@ func DetectOS() {
 	default:
 		log.Fatalf("Unsupported operating system: %s", runtime.GOOS)
 	}
+
+	log.Printf("Detected operating system: %s %s", osType, osDist)
 }
 
 func normalizeLinuxDist(dist string) string {
