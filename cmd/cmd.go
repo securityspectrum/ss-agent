@@ -1,4 +1,3 @@
-// cmd.go
 package cmd
 
 import (
@@ -22,12 +21,15 @@ import (
 )
 
 var (
+	client     *http.Client
 	configPath string // Holds the value of the --config flag
 	debugMode  bool   // Holds the value of the --debug flag
+	daemonMode bool   // Holds the value of the --daemon flag
 )
 
 const pidFile = "/tmp/ss-agent.pid" // Or use a directory within the user's home directory
 
+// printConfig logs the current configuration in a readable format
 func printConfig(cfg interface{}) {
 	v := reflect.ValueOf(cfg)
 	t := v.Type()
@@ -40,9 +42,7 @@ func printConfig(cfg interface{}) {
 
 // Execute sets up and runs the Cobra command structure
 func Execute(version string, ctx context.Context, cancel context.CancelFunc) {
-	var client *http.Client
-
-	rootCmd := &cobra.Command{
+	var rootCmd = &cobra.Command{
 		Use:   "agent",
 		Short: "SIEM Agent",
 	}
@@ -51,10 +51,11 @@ func Execute(version string, ctx context.Context, cancel context.CancelFunc) {
 	rootCmd.PersistentFlags().StringVar(&configPath, "config", "", "Path to configuration file")
 	rootCmd.PersistentFlags().BoolVar(&debugMode, "debug", false, "Enable debug mode")
 
-	// Define loadConfig as a PreRun hook
+	// loadConfig is a PreRun hook that loads the configuration based on the --config flag
 	loadConfig := func(cmd *cobra.Command, args []string) {
 		// Load the config file if the --config flag is provided
 		if configPath != "" {
+			log.Printf("Loading configuration from: %s\n", configPath)
 			if err := config.LoadConfigFromFile(configPath); err != nil {
 				log.Fatalf("Failed to load config from file: %v", err)
 			}
@@ -81,63 +82,58 @@ func Execute(version string, ctx context.Context, cancel context.CancelFunc) {
 		if debugMode {
 			log.SetFlags(log.LstdFlags | log.Lshortfile)
 			log.Println("Configuration loaded:")
-			printConfig(conf)
+			printConfig(config.GetConfig())
 			log.Printf("OS Type: %s\n", osinfo.GetOSType())
 			log.Printf("OS Distribution: %s\n", osinfo.GetOSDist())
 			log.Printf("Program Version: %s\n", version)
 		}
 	}
 
-	// runPingInIntervals function
-	runPingInIntervals := func(ctx context.Context) {
-		conf := config.GetConfig()
-		pingInterval := time.Duration(conf.PingInterval) * time.Second
-		if conf.PingInterval < 5 {
-			pingInterval = 5 * time.Second
-		}
-
-		ticker := time.NewTicker(pingInterval)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-ctx.Done():
-				log.Println("Stopping pinging due to service shutdown")
-				return
-			case <-ticker.C:
-				if err := api.Ping(client); err != nil {
-					log.Printf("ping failed: %v", err)
+	// Check if an instance is already running
+	checkRunningInstance := func() bool {
+		data, err := os.ReadFile(pidFile)
+		if err == nil { // If PID file exists
+			pid, err := strconv.Atoi(string(data))
+			if err == nil {
+				process, err := os.FindProcess(pid)
+				if err == nil && process.Signal(syscall.Signal(0)) == nil {
+					// Process is running
+					log.Printf("An instance of the agent is already running with PID %d\n", pid)
+					return true
 				}
 			}
 		}
+		// No running instance found or PID file does not exist
+		return false
 	}
 
 	// Start Command
-	startCmd := &cobra.Command{
+	var startCmd = &cobra.Command{
 		Use:    "start",
 		Short:  "Start the agent service",
 		PreRun: loadConfig,
 		Run: func(cmd *cobra.Command, args []string) {
-			log.Println("Starting agent service...")
-			writePidFile()
-			go runPingInIntervals(ctx)
-			<-ctx.Done() // Wait for context to be done
-		},
-	}
+			// Prevent starting a new instance if one is already running
+			if checkRunningInstance() {
+				log.Fatal("Failed to start: another instance of the agent is already running.")
+			}
 
-	// Daemon Command
-	daemonCmd := &cobra.Command{
-		Use:    "daemon",
-		Short:  "Start the agent service in the background",
-		PreRun: loadConfig,
-		Run: func(cmd *cobra.Command, args []string) {
-			log.Println("Starting agent service in the background...")
-			cmdDaemonize()
+			if daemonMode {
+				// If daemon mode is enabled, start in the background
+				log.Println("Starting agent service in the background...")
+				cmdDaemonize()
+			} else {
+				// Otherwise, start normally
+				log.Println("Starting agent service...")
+				writePidFile()
+				go runPingInIntervals(ctx)
+				<-ctx.Done() // Wait for context to be done
+			}
 		},
 	}
 
 	// Stop Command
-	stopCmd := &cobra.Command{
+	var stopCmd = &cobra.Command{
 		Use:    "stop",
 		Short:  "Stop the agent service",
 		PreRun: loadConfig,
@@ -147,8 +143,8 @@ func Execute(version string, ctx context.Context, cancel context.CancelFunc) {
 		},
 	}
 
-	// Status Command (no PreRun)
-	statusCmd := &cobra.Command{
+	// Status Command
+	var statusCmd = &cobra.Command{
 		Use:   "status",
 		Short: "Get the agent status",
 		Run: func(cmd *cobra.Command, args []string) {
@@ -164,7 +160,7 @@ func Execute(version string, ctx context.Context, cancel context.CancelFunc) {
 	}
 
 	// Register Command
-	registerCmd := &cobra.Command{
+	var registerCmd = &cobra.Command{
 		Use:    "register",
 		Short:  "Register the agent",
 		PreRun: loadConfig,
@@ -183,7 +179,7 @@ func Execute(version string, ctx context.Context, cancel context.CancelFunc) {
 	}
 
 	// Unregister Command
-	unregisterCmd := &cobra.Command{
+	var unregisterCmd = &cobra.Command{
 		Use:    "unregister",
 		Short:  "Unregister the agent",
 		PreRun: loadConfig,
@@ -202,7 +198,7 @@ func Execute(version string, ctx context.Context, cancel context.CancelFunc) {
 	}
 
 	// Ping Command
-	pingCmd := &cobra.Command{
+	var pingCmd = &cobra.Command{
 		Use:    "ping",
 		Short:  "Ping the SIEM server once",
 		PreRun: loadConfig,
@@ -220,8 +216,8 @@ func Execute(version string, ctx context.Context, cancel context.CancelFunc) {
 		},
 	}
 
-	// Version Command (No PreRun)
-	versionCmd := &cobra.Command{
+	// Version Command (No PreRun, hence no config loading)
+	var versionCmd = &cobra.Command{
 		Use:   "version",
 		Short: "Print the version number of the agent",
 		Run: func(cmd *cobra.Command, args []string) {
@@ -230,13 +226,13 @@ func Execute(version string, ctx context.Context, cancel context.CancelFunc) {
 	}
 
 	// Service Command
-	serviceCmd := &cobra.Command{
+	var serviceCmd = &cobra.Command{
 		Use:   "service",
 		Short: "Manage services (install, uninstall, start, stop, restart, status)",
 	}
 
 	// Install Service Command
-	installCmd := &cobra.Command{
+	var installCmd = &cobra.Command{
 		Use:    "install [service]",
 		Short:  "Install a service (fluent-bit, zeek, osquery)",
 		PreRun: loadConfig,
@@ -256,7 +252,7 @@ func Execute(version string, ctx context.Context, cancel context.CancelFunc) {
 	}
 
 	// Uninstall Service Command
-	uninstallCmd := &cobra.Command{
+	var uninstallCmd = &cobra.Command{
 		Use:    "uninstall [service]",
 		Short:  "Uninstall a service (fluent-bit, zeek, osquery)",
 		PreRun: loadConfig,
@@ -278,8 +274,11 @@ func Execute(version string, ctx context.Context, cancel context.CancelFunc) {
 	// Add install and uninstall to service command
 	serviceCmd.AddCommand(installCmd, uninstallCmd)
 
+	// Add daemon flag to start command
+	startCmd.Flags().BoolVarP(&daemonMode, "daemon", "d", false, "Run the agent service in the background")
+
 	// Add all commands to rootCmd
-	rootCmd.AddCommand(startCmd, daemonCmd, stopCmd, statusCmd, registerCmd, unregisterCmd, pingCmd, versionCmd, serviceCmd)
+	rootCmd.AddCommand(startCmd, stopCmd, statusCmd, registerCmd, unregisterCmd, pingCmd, versionCmd, serviceCmd)
 
 	// Execute the root command
 	if err := rootCmd.Execute(); err != nil {
@@ -289,7 +288,7 @@ func Execute(version string, ctx context.Context, cancel context.CancelFunc) {
 
 // cmdDaemonize starts the agent as a background process
 func cmdDaemonize() {
-	cmd := exec.Command(os.Args[0], "start")
+	cmd := exec.Command(os.Args[0], "start", "--config", configPath)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Start()
@@ -299,7 +298,6 @@ func cmdDaemonize() {
 
 // writePidFile writes the current process PID to the pidFile
 func writePidFile() {
-	const pidFile = "/tmp/ss-agent.pid"
 	pid := os.Getpid()
 	err := os.WriteFile(pidFile, []byte(strconv.Itoa(pid)), 0644)
 	if err != nil {
@@ -309,7 +307,6 @@ func writePidFile() {
 
 // stopService sends a SIGTERM to the process whose PID is stored in pidFile
 func stopService() {
-	const pidFile = "/tmp/ss-agent.pid"
 	data, err := os.ReadFile(pidFile)
 	if err != nil {
 		log.Fatalf("Failed to read PID file: %v", err)
@@ -335,7 +332,6 @@ func stopService() {
 
 // statusService checks if the process with PID from pidFile is running
 func statusService() {
-	const pidFile = "/tmp/ss-agent.pid"
 	data, err := os.ReadFile(pidFile)
 	if err != nil {
 		fmt.Println("stopped")
@@ -353,5 +349,29 @@ func statusService() {
 		fmt.Println("stopped")
 	} else {
 		fmt.Println("running")
+	}
+}
+
+// runPingInIntervals continuously pings the SIEM server based on the PingInterval
+func runPingInIntervals(ctx context.Context) {
+	conf := config.GetConfig()
+	pingInterval := time.Duration(conf.PingInterval) * time.Second
+	if conf.PingInterval < 5 {
+		pingInterval = 5 * time.Second
+	}
+
+	ticker := time.NewTicker(pingInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			log.Println("Stopping pinging due to service shutdown")
+			return
+		case <-ticker.C:
+			if err := api.Ping(client); err != nil {
+				log.Printf("ping failed: %v", err)
+			}
+		}
 	}
 }
