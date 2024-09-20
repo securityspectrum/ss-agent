@@ -3,6 +3,8 @@ Downloads and removes unused modules/packages/dependencies with:
 go mod tidy
 ```
 
+Configure the configuration file by renaming the `config-template.json` to
+`config.json` and changing the values to your own.
 
 Run the program from source code:
 ```

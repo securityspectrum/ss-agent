@@ -23,11 +23,12 @@ type Config struct {
 var config Config
 
 var defaultConfigPaths = []string{
-	"./config/config.json",
+	"./config.json",
 	"/etc/ss-agent/config/config.json",
 	"/usr/local/etc/ss-agent/config/config.json",
 	"/usr/local/ss-agent/config/config.json",
 	"C:\\ProgramData\\ss-agent\\config\\config.json",
+	"/Library/Application Support/ss-agent/config/config.json",
 }
 
 // findConfigFile searches for the configuration file in default paths
