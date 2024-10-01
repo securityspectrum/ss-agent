@@ -146,18 +146,68 @@ func UninstallService(serviceName string) error {
 }
 
 func ManageService(serviceName, action string) error {
-	fmt.Printf("%s %s service...\n", action, serviceName)
+	osType := osinfo.GetOSType()
+	osDist := osinfo.GetOSDist()
+	fmt.Printf("%s %s service on %s/%s...\n", strings.Title(action), serviceName, osType, osDist)
 	var manageCmd string
 
-	switch serviceName {
-	case "fluent-bit":
-		manageCmd = fmt.Sprintf("sudo systemctl %s fluent-bit", action)
-	case "zeek":
-		manageCmd = fmt.Sprintf("sudo systemctl %s zeek", action)
-	case "osquery":
-		manageCmd = fmt.Sprintf("sudo systemctl %s osqueryd", action)
+	switch osType {
+	case "windows":
+		switch action {
+		case "start", "stop", "restart", "status":
+			// Windows services often have different naming conventions; adjust if necessary
+			serviceMap := map[string]string{
+				"osquery":    "osqueryd",
+				"fluent-bit": "fluent-bit",
+				"zeek":       "zeek",
+			}
+			mappedService, exists := serviceMap[serviceName]
+			if !exists {
+				return fmt.Errorf("unknown service: %s", serviceName)
+			}
+			manageCmd = fmt.Sprintf("sc %s %s", action, mappedService)
+		default:
+			return fmt.Errorf("unsupported action: %s for Windows", action)
+		}
+	case "darwin":
+		switch action {
+		case "start", "stop", "restart", "status":
+			serviceMap := map[string]string{
+				"osquery":    "com.facebook.osqueryd",
+				"fluent-bit": "homebrew.mxcl.fluent-bit",
+				"zeek":       "org.zeek.zeek",
+			}
+			mappedService, exists := serviceMap[serviceName]
+			if !exists {
+				return fmt.Errorf("unknown service: %s", serviceName)
+			}
+			// Note: macOS uses launchctl with different syntax
+			if action == "restart" {
+				manageCmd = fmt.Sprintf("launchctl stop %s && launchctl start %s", mappedService, mappedService)
+			} else {
+				manageCmd = fmt.Sprintf("launchctl %s %s", action, mappedService)
+			}
+		default:
+			return fmt.Errorf("unsupported action: %s for macOS", action)
+		}
+	case "linux":
+		switch action {
+		case "start", "stop", "restart", "status":
+			serviceMap := map[string]string{
+				"osquery":    "osqueryd",
+				"fluent-bit": "fluent-bit",
+				"zeek":       "zeek",
+			}
+			mappedService, exists := serviceMap[serviceName]
+			if !exists {
+				return fmt.Errorf("unknown service: %s", serviceName)
+			}
+			manageCmd = fmt.Sprintf("sudo systemctl %s %s", action, mappedService)
+		default:
+			return fmt.Errorf("unsupported action: %s for Linux", action)
+		}
 	default:
-		return fmt.Errorf("unknown service: %s", serviceName)
+		return fmt.Errorf("unsupported operating system: %s", osType)
 	}
 
 	cmd := exec.Command("sh", "-c", manageCmd)
@@ -165,7 +215,7 @@ func ManageService(serviceName, action string) error {
 	if err != nil {
 		return fmt.Errorf("failed to %s %s: %v\nOutput: %s", action, serviceName, err, string(output))
 	}
-	fmt.Printf("%s %s service successfully.\n", strings.Title(action), serviceName)
+	fmt.Printf("%s %s service successfully on %s/%s.\n", strings.Title(action), serviceName, osType, osDist)
 	return nil
 }
 
@@ -189,6 +239,80 @@ func CheckServiceHealth(serviceName string) (string, error) {
 	status := strings.TrimSpace(string(output))
 	if err != nil {
 		return status, fmt.Errorf("failed to check health of %s: %v\nOutput: %s", serviceName, err, string(output))
+	}
+
+	return status, nil
+}
+
+func CheckServiceStatus(serviceName string) (string, error) {
+	osType := osinfo.GetOSType()
+	osDist := osinfo.GetOSDist()
+	fmt.Printf("Checking status of %s on %s/%s...\n", serviceName, osType, osDist)
+	var statusCmd string
+
+	switch osType {
+	case "windows":
+		serviceMap := map[string]string{
+			"osquery":    "osqueryd",
+			"fluent-bit": "fluent-bit",
+			"zeek":       "zeek",
+		}
+		mappedService, exists := serviceMap[serviceName]
+		if !exists {
+			return "", fmt.Errorf("unknown service: %s", serviceName)
+		}
+		statusCmd = fmt.Sprintf("sc query %s | findstr /I \"STATE\"", mappedService)
+	case "darwin":
+		serviceMap := map[string]string{
+			"osquery":    "com.facebook.osqueryd",
+			"fluent-bit": "homebrew.mxcl.fluent-bit",
+			"zeek":       "org.zeek.zeek",
+		}
+		mappedService, exists := serviceMap[serviceName]
+		if !exists {
+			return "", fmt.Errorf("unknown service: %s", serviceName)
+		}
+		statusCmd = fmt.Sprintf("launchctl list | grep %s", mappedService)
+	case "linux":
+		serviceMap := map[string]string{
+			"osquery":    "osqueryd",
+			"fluent-bit": "fluent-bit",
+			"zeek":       "zeek",
+		}
+		mappedService, exists := serviceMap[serviceName]
+		if !exists {
+			return "", fmt.Errorf("unknown service: %s", serviceName)
+		}
+		statusCmd = fmt.Sprintf("systemctl is-active %s", mappedService)
+	default:
+		return "", fmt.Errorf("unsupported operating system: %s", osType)
+	}
+
+	cmd := exec.Command("sh", "-c", statusCmd)
+	output, err := cmd.CombinedOutput()
+	status := strings.TrimSpace(string(output))
+
+	if osType == "windows" {
+		// Parse Windows SC query output
+		if strings.Contains(status, "RUNNING") {
+			status = "active"
+		} else if strings.Contains(status, "STOPPED") {
+			status = "inactive"
+		} else {
+			status = "unknown"
+		}
+	} else if osType == "darwin" {
+		if status == "" {
+			status = "inactive"
+		} else {
+			status = "active"
+		}
+	} else if osType == "linux" {
+		// systemctl already returns active/inactive/failed
+	}
+
+	if err != nil && status == "" {
+		return status, fmt.Errorf("failed to check status of %s: %v\nOutput: %s", serviceName, err, string(output))
 	}
 
 	return status, nil

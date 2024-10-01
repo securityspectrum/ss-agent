@@ -231,51 +231,97 @@ func Execute(version string, ctx context.Context, cancel context.CancelFunc) {
 	// Service Command
 	var serviceCmd = &cobra.Command{
 		Use:   "service",
-		Short: "Manage services (install, uninstall, start, stop, restart, status)",
+		Short: "Manage services (start, stop, restart, status)",
 	}
 
-	// Install Service Command
-	var installCmd = &cobra.Command{
-		Use:    "install [service]",
-		Short:  "Install a service (fluent-bit, zeek, osquery)",
+	// Start Service Command
+	var serviceStartCmd = &cobra.Command{
+		Use:    "start [service]",
+		Short:  "Start a service (fluent-bit, zeek, osquery)",
 		PreRun: loadConfig,
 		Args:   cobra.MinimumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
+			serviceName := args[0]
 			if debugMode {
-				log.Printf("Installing service %s in debug mode...", args[0])
-				log.SetFlags(log.LstdFlags | log.Lshortfile) // More verbose logging
+				log.Printf("Starting service %s in debug mode...", serviceName)
+				log.SetFlags(log.LstdFlags | log.Lshortfile)
 			} else {
-				log.Printf("Installing service %s...", args[0])
+				log.Printf("Starting service %s...", serviceName)
 				log.SetFlags(log.LstdFlags)
 			}
-			if err := service.InstallService(args[0]); err != nil {
-				log.Fatalf("Failed to install service: %v", err)
+			if err := service.ManageService(serviceName, "start"); err != nil {
+				log.Fatalf("Failed to start service: %v", err)
 			}
 		},
 	}
 
-	// Uninstall Service Command
-	var uninstallCmd = &cobra.Command{
-		Use:    "uninstall [service]",
-		Short:  "Uninstall a service (fluent-bit, zeek, osquery)",
+	// Stop Service Command
+	var serviceStopCmd = &cobra.Command{
+		Use:    "stop [service]",
+		Short:  "Stop a service (fluent-bit, zeek, osquery)",
 		PreRun: loadConfig,
 		Args:   cobra.MinimumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
+			serviceName := args[0]
 			if debugMode {
-				log.Printf("Uninstalling service %s in debug mode...", args[0])
-				log.SetFlags(log.LstdFlags | log.Lshortfile) // More verbose logging
+				log.Printf("Stopping service %s in debug mode...", serviceName)
+				log.SetFlags(log.LstdFlags | log.Lshortfile)
 			} else {
-				log.Printf("Uninstalling service %s...", args[0])
+				log.Printf("Stopping service %s...", serviceName)
 				log.SetFlags(log.LstdFlags)
 			}
-			if err := service.UninstallService(args[0]); err != nil {
-				log.Fatalf("Failed to uninstall service: %v", err)
+			if err := service.ManageService(serviceName, "stop"); err != nil {
+				log.Fatalf("Failed to stop service: %v", err)
 			}
+		},
+	}
+
+	// Restart Service Command
+	var serviceRestartCmd = &cobra.Command{
+		Use:    "restart [service]",
+		Short:  "Restart a service (fluent-bit, zeek, osquery)",
+		PreRun: loadConfig,
+		Args:   cobra.MinimumNArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			serviceName := args[0]
+			if debugMode {
+				log.Printf("Restarting service %s in debug mode...", serviceName)
+				log.SetFlags(log.LstdFlags | log.Lshortfile)
+			} else {
+				log.Printf("Restarting service %s...", serviceName)
+				log.SetFlags(log.LstdFlags)
+			}
+			if err := service.ManageService(serviceName, "restart"); err != nil {
+				log.Fatalf("Failed to restart service: %v", err)
+			}
+		},
+	}
+
+	// Status Service Command
+	var serviceStatusCmd = &cobra.Command{
+		Use:    "status [service]",
+		Short:  "Get the status of a service (fluent-bit, zeek, osquery)",
+		PreRun: loadConfig,
+		Args:   cobra.MinimumNArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			serviceName := args[0]
+			if debugMode {
+				log.Printf("Checking status of service %s in debug mode...", serviceName)
+				log.SetFlags(log.LstdFlags | log.Lshortfile)
+			} else {
+				log.Printf("Checking status of service %s...", serviceName)
+				log.SetFlags(log.LstdFlags)
+			}
+			status, err := service.CheckServiceStatus(serviceName)
+			if err != nil {
+				log.Printf("Error: %v", err)
+			}
+			service.RenderHealthStatus(serviceName, status)
 		},
 	}
 
 	// Add install and uninstall to service command
-	serviceCmd.AddCommand(installCmd, uninstallCmd)
+	serviceCmd.AddCommand(serviceStartCmd, serviceStopCmd, serviceRestartCmd, serviceStatusCmd)
 
 	// Add daemon flag to start command
 	startCmd.Flags().BoolVarP(&daemonMode, "daemon", "d", false, "Run the agent service in the background")
