@@ -1,3 +1,5 @@
+// service/service.go
+
 package service
 
 import (
@@ -7,6 +9,10 @@ import (
 	"strings"
 )
 
+// AllServices contains all the services managed by ss-agent.
+var AllServices = []string{"fluent-bit", "zeek", "osquery"}
+
+// InstallService installs the specified service based on the OS type and distribution.
 func InstallService(serviceName string) error {
 	osType := osinfo.GetOSType()
 	osDist := osinfo.GetOSDist()
@@ -76,6 +82,7 @@ func InstallService(serviceName string) error {
 	return nil
 }
 
+// UninstallService uninstalls the specified service based on the OS type and distribution.
 func UninstallService(serviceName string) error {
 	osType := osinfo.GetOSType()
 	osDist := osinfo.GetOSDist()
@@ -145,10 +152,40 @@ func UninstallService(serviceName string) error {
 	return nil
 }
 
+// ManageService manages the specified service based on the action.
+// If serviceName is "all", it applies the action to all services.
 func ManageService(serviceName, action string) error {
 	osType := osinfo.GetOSType()
 	osDist := osinfo.GetOSDist()
+
+	if strings.ToLower(serviceName) == "all" {
+		// Apply the action to all services
+		fmt.Printf("%s all services on %s/%s...\n", strings.Title(action), osType, osDist)
+		var overallError error
+		for _, svc := range AllServices {
+			err := performAction(svc, action, osType, osDist)
+			if err != nil {
+				fmt.Printf("Error %sing %s: %v\n", action, svc, err)
+				overallError = err
+			} else {
+				fmt.Printf("%s %s service successfully on %s/%s.\n", strings.Title(action), svc, osType, osDist)
+			}
+		}
+		return overallError
+	}
+
+	// Continue with individual service management if service name is provided
 	fmt.Printf("%s %s service on %s/%s...\n", strings.Title(action), serviceName, osType, osDist)
+	err := performAction(serviceName, action, osType, osDist)
+	if err != nil {
+		return fmt.Errorf("failed to %s %s: %v", action, serviceName, err)
+	}
+	fmt.Printf("%s %s service successfully on %s/%s.\n", strings.Title(action), serviceName, osType, osDist)
+	return nil
+}
+
+// performAction performs the specified action on a single service.
+func performAction(serviceName, action, osType, osDist string) error {
 	var manageCmd string
 
 	switch osType {
@@ -165,7 +202,11 @@ func ManageService(serviceName, action string) error {
 			if !exists {
 				return fmt.Errorf("unknown service: %s", serviceName)
 			}
-			manageCmd = fmt.Sprintf("sc %s %s", action, mappedService)
+			if action == "restart" {
+				manageCmd = fmt.Sprintf("sc stop %s && sc start %s", mappedService, mappedService)
+			} else {
+				manageCmd = fmt.Sprintf("sc %s %s", action, mappedService)
+			}
 		default:
 			return fmt.Errorf("unsupported action: %s for Windows", action)
 		}
@@ -202,7 +243,11 @@ func ManageService(serviceName, action string) error {
 			if !exists {
 				return fmt.Errorf("unknown service: %s", serviceName)
 			}
-			manageCmd = fmt.Sprintf("sudo systemctl %s %s", action, mappedService)
+			if action == "restart" {
+				manageCmd = fmt.Sprintf("sudo systemctl restart %s", mappedService)
+			} else {
+				manageCmd = fmt.Sprintf("sudo systemctl %s %s", action, mappedService)
+			}
 		default:
 			return fmt.Errorf("unsupported action: %s for Linux", action)
 		}
@@ -213,12 +258,12 @@ func ManageService(serviceName, action string) error {
 	cmd := exec.Command("sh", "-c", manageCmd)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("failed to %s %s: %v\nOutput: %s", action, serviceName, err, string(output))
+		return fmt.Errorf("%s failed: %v\nOutput: %s", action, err, string(output))
 	}
-	fmt.Printf("%s %s service successfully on %s/%s.\n", strings.Title(action), serviceName, osType, osDist)
 	return nil
 }
 
+// CheckServiceHealth checks the health of the specified service.
 func CheckServiceHealth(serviceName string) (string, error) {
 	fmt.Printf("Checking health of %s...\n", serviceName)
 	var healthCmd string
@@ -244,6 +289,7 @@ func CheckServiceHealth(serviceName string) (string, error) {
 	return status, nil
 }
 
+// CheckServiceStatus checks the current status of the specified service.
 func CheckServiceStatus(serviceName string) (string, error) {
 	osType := osinfo.GetOSType()
 	osDist := osinfo.GetOSDist()
@@ -318,6 +364,7 @@ func CheckServiceStatus(serviceName string) (string, error) {
 	return status, nil
 }
 
+// RenderHealthStatus displays the health status of a service in a formatted manner.
 func RenderHealthStatus(serviceName, status string) {
 	var statusText string
 	switch status {
@@ -333,14 +380,26 @@ func RenderHealthStatus(serviceName, status string) {
 	fmt.Printf("%-15s: %s\n", serviceName, statusText)
 }
 
-func HealthCheck() {
-	services := []string{"fluent-bit", "zeek", "osquery"}
-	for _, service := range services {
-		status, err := CheckServiceHealth(service)
+// HealthCheck performs a health check on a specified service or all services if 'all' is provided.
+func HealthCheck(serviceName string) {
+	if strings.ToLower(serviceName) == "all" {
+		// List all services' statuses
+		fmt.Printf("Listing all service statuses on %s/%s\n", osinfo.GetOSType(), osinfo.GetOSDist())
+		for _, svc := range AllServices {
+			status, err := CheckServiceStatus(svc)
+			if err != nil {
+				fmt.Printf("Error checking status of %s: %v\n", svc, err)
+			} else {
+				RenderHealthStatus(svc, status)
+			}
+		}
+	} else {
+		// Check the status of a specific service
+		status, err := CheckServiceStatus(serviceName)
 		if err != nil {
-			RenderHealthStatus(service, status)
+			fmt.Printf("Error checking status of %s: %v\n", serviceName, err)
 		} else {
-			RenderHealthStatus(service, status)
+			RenderHealthStatus(serviceName, status)
 		}
 	}
 }

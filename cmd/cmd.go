@@ -1,3 +1,5 @@
+// cmd/cmd.go
+
 package cmd
 
 import (
@@ -11,6 +13,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -29,6 +32,20 @@ var (
 )
 
 const pidFile = "/tmp/ss-agent.pid" // Or use a directory within the user's home directory
+
+// Define valid services including 'all'
+var validServices = []string{"fluent-bit", "zeek", "osquery", "all"}
+
+// Helper function to check if a slice contains a string (case-insensitive)
+func contains(slice []string, item string) bool {
+	item = strings.ToLower(item)
+	for _, s := range slice {
+		if strings.ToLower(s) == item {
+			return true
+		}
+	}
+	return false
+}
 
 // printConfig logs the current configuration in a readable format
 func printConfig(cfg interface{}) {
@@ -236,12 +253,18 @@ func Execute(version string, ctx context.Context, cancel context.CancelFunc) {
 
 	// Start Service Command
 	var serviceStartCmd = &cobra.Command{
-		Use:    "start [service]",
-		Short:  "Start a service (fluent-bit, zeek, osquery)",
+		Use:    "start [service|all]",
+		Short:  "Start a service (fluent-bit, zeek, osquery) or all services",
 		PreRun: loadConfig,
-		Args:   cobra.MinimumNArgs(1),
+		Args:   cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
-			serviceName := args[0]
+			serviceName := strings.ToLower(args[0])
+			if !contains(validServices, serviceName) {
+				fmt.Printf("Invalid service name: %s\n", args[0])
+				fmt.Printf("Valid services are: %s\n", strings.Join(service.AllServices, ", "))
+				fmt.Printf("Or use 'all' to manage all services.\n")
+				os.Exit(1)
+			}
 			if debugMode {
 				log.Printf("Starting service %s in debug mode...", serviceName)
 				log.SetFlags(log.LstdFlags | log.Lshortfile)
@@ -257,12 +280,18 @@ func Execute(version string, ctx context.Context, cancel context.CancelFunc) {
 
 	// Stop Service Command
 	var serviceStopCmd = &cobra.Command{
-		Use:    "stop [service]",
-		Short:  "Stop a service (fluent-bit, zeek, osquery)",
+		Use:    "stop [service|all]",
+		Short:  "Stop a service (fluent-bit, zeek, osquery) or all services",
 		PreRun: loadConfig,
-		Args:   cobra.MinimumNArgs(1),
+		Args:   cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
-			serviceName := args[0]
+			serviceName := strings.ToLower(args[0])
+			if !contains(validServices, serviceName) {
+				fmt.Printf("Invalid service name: %s\n", args[0])
+				fmt.Printf("Valid services are: %s\n", strings.Join(service.AllServices, ", "))
+				fmt.Printf("Or use 'all' to manage all services.\n")
+				os.Exit(1)
+			}
 			if debugMode {
 				log.Printf("Stopping service %s in debug mode...", serviceName)
 				log.SetFlags(log.LstdFlags | log.Lshortfile)
@@ -278,12 +307,18 @@ func Execute(version string, ctx context.Context, cancel context.CancelFunc) {
 
 	// Restart Service Command
 	var serviceRestartCmd = &cobra.Command{
-		Use:    "restart [service]",
-		Short:  "Restart a service (fluent-bit, zeek, osquery)",
+		Use:    "restart [service|all]",
+		Short:  "Restart a service (fluent-bit, zeek, osquery) or all services",
 		PreRun: loadConfig,
-		Args:   cobra.MinimumNArgs(1),
+		Args:   cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
-			serviceName := args[0]
+			serviceName := strings.ToLower(args[0])
+			if !contains(validServices, serviceName) {
+				fmt.Printf("Invalid service name: %s\n", args[0])
+				fmt.Printf("Valid services are: %s\n", strings.Join(service.AllServices, ", "))
+				fmt.Printf("Or use 'all' to manage all services.\n")
+				os.Exit(1)
+			}
 			if debugMode {
 				log.Printf("Restarting service %s in debug mode...", serviceName)
 				log.SetFlags(log.LstdFlags | log.Lshortfile)
@@ -299,12 +334,23 @@ func Execute(version string, ctx context.Context, cancel context.CancelFunc) {
 
 	// Status Service Command
 	var serviceStatusCmd = &cobra.Command{
-		Use:    "status [service]",
-		Short:  "Get the status of a service (fluent-bit, zeek, osquery)",
+		Use:   "status [service|all]",
+		Short: "Get the status of a service (fluent-bit, zeek, osquery) or all services",
+		Long: `Check the status of a specific service or all managed services.
+
+Examples:
+  ss-agent service status zeek
+  ss-agent service status all`,
 		PreRun: loadConfig,
-		Args:   cobra.MinimumNArgs(1),
+		Args:   cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
-			serviceName := args[0]
+			serviceName := strings.ToLower(args[0])
+			if !contains(validServices, serviceName) {
+				fmt.Printf("Invalid service name: %s\n", args[0])
+				fmt.Printf("Valid services are: %s\n", strings.Join(service.AllServices, ", "))
+				fmt.Printf("Or use 'all' to manage all services.\n")
+				os.Exit(1)
+			}
 			if debugMode {
 				log.Printf("Checking status of service %s in debug mode...", serviceName)
 				log.SetFlags(log.LstdFlags | log.Lshortfile)
@@ -312,22 +358,18 @@ func Execute(version string, ctx context.Context, cancel context.CancelFunc) {
 				log.Printf("Checking status of service %s...", serviceName)
 				log.SetFlags(log.LstdFlags)
 			}
-			status, err := service.CheckServiceStatus(serviceName)
-			if err != nil {
-				log.Printf("Error: %v", err)
-			}
-			service.RenderHealthStatus(serviceName, status)
+			service.HealthCheck(serviceName)
 		},
 	}
 
-	// Add install and uninstall to service command
+	// Add subcommands to 'service' command
 	serviceCmd.AddCommand(serviceStartCmd, serviceStopCmd, serviceRestartCmd, serviceStatusCmd)
+
+	// Add 'service' and other commands to root
+	rootCmd.AddCommand(startCmd, stopCmd, statusCmd, registerCmd, unregisterCmd, pingCmd, versionCmd, serviceCmd)
 
 	// Add daemon flag to start command
 	startCmd.Flags().BoolVarP(&daemonMode, "daemon", "d", false, "Run the agent service in the background")
-
-	// Add all commands to rootCmd
-	rootCmd.AddCommand(startCmd, stopCmd, statusCmd, registerCmd, unregisterCmd, pingCmd, versionCmd, serviceCmd)
 
 	// Execute the root command
 	if err := rootCmd.Execute(); err != nil {
