@@ -31,6 +31,16 @@ func OsqueryStatus() (string, error) {
 	case "darwin":
 		cmd := exec.Command("launchctl", "list", "com.facebook.osqueryd")
 		output, err := cmd.CombinedOutput()
+
+		// Handle the specific exit code for service not found
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			if exitErr.ExitCode() == 113 {
+				// Service not found or not installed
+				return "[NOT INSTALLED]", nil
+			}
+		}
+
+		// Handle other errors
 		if err != nil {
 			return "[FAILED]", fmt.Errorf("launchctl list failed: %v\nOutput: %s", err, string(output))
 		}

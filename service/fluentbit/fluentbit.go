@@ -31,6 +31,11 @@ func FluentBitStatus() (string, error) {
 	case "darwin":
 		cmd := exec.Command("launchctl", "print", "system")
 		output, err := cmd.CombinedOutput()
+
+		// Check if the error is specifically because the service is not found
+		if err != nil && strings.Contains(string(output), "could not find service") {
+			return "[NOT INSTALLED]", nil
+		}
 		if err != nil {
 			return "[FAILED]", fmt.Errorf("launchctl print failed: %v\nOutput: %s", err, string(output))
 		}
