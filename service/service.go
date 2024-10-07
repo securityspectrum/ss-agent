@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-var AllServices = []string{"fluent-bit", "zeek", "osquery"}
+var AllServices = []string{"fluent-bit", "zeek", "osqueryd"}
 
 // ManageService manages the specified service based on the action.
 func ManageService(serviceName, action string) error {
@@ -19,8 +19,30 @@ func ManageService(serviceName, action string) error {
 		return handleZeekService(action)
 	case "fluent-bit":
 		return handleFluentBitService(action)
+	case "osqueryd":
+		return handleOsqueryService(action) // Add this line
 	default:
 		return fmt.Errorf("unknown service: %s", serviceName)
+	}
+}
+
+func handleOsqueryService(action string) error {
+	switch action {
+	case "start":
+		return osquery.OsqueryStart()
+	case "stop":
+		return osquery.OsqueryStop()
+	case "restart":
+		return osquery.OsqueryRestart()
+	case "status":
+		status, err := osquery.OsqueryStatus()
+		if err != nil {
+			return err
+		}
+		fmt.Printf("Osquery: %s\n", status)
+		return nil
+	default:
+		return fmt.Errorf("unknown action: %s for osqueryd", action)
 	}
 }
 
@@ -103,7 +125,7 @@ func checkServiceStatus(serviceName string) (string, error) {
 			return "[UNKNOWN]", err
 		}
 		return status, nil
-	case "osquery":
+	case "osqueryd":
 		status, err := osquery.OsqueryStatus() // Capture both status and error
 		if err != nil {
 			return "[UNKNOWN]", err

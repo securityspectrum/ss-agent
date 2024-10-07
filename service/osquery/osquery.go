@@ -9,7 +9,7 @@ import (
 
 // OsqueryStatus checks the status of Osquery using platform-specific commands
 func OsqueryStatus() (string, error) {
-	fmt.Println("Checking Osquery status...")
+	fmt.Println("Checking osqueryd status...")
 
 	switch runtime.GOOS {
 	case "linux":

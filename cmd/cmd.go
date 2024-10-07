@@ -34,7 +34,7 @@ var (
 const pidFile = "/tmp/ss-agent.pid" // Or use a directory within the user's home directory
 
 // Define valid services including 'all'
-var validServices = []string{"fluent-bit", "zeek", "osquery", "all"}
+var validServices = []string{"fluent-bit", "zeek", "osqueryd", "all"}
 
 // Helper function to check if a slice contains a string (case-insensitive)
 func contains(slice []string, item string) bool {
@@ -254,26 +254,35 @@ func Execute(version string, ctx context.Context, cancel context.CancelFunc) {
 	// Start Service Command
 	var serviceStartCmd = &cobra.Command{
 		Use:    "start [service|all]",
-		Short:  "Start a service (fluent-bit, zeek, osquery) or all services",
+		Short:  "Start a service (fluent-bit, zeek, osqueryd) or all services",
 		PreRun: loadConfig,
 		Args:   cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			serviceName := strings.ToLower(args[0])
-			if !contains(validServices, serviceName) {
+			if serviceName == "all" {
+				log.Println("Starting all services...")
+				for _, svc := range service.AllServices {
+					log.Printf("Attempting to start %s...", svc)
+					if err := service.ManageService(svc, "start"); err != nil {
+						log.Printf("Failed to start %s: %v", svc, err)
+						fmt.Printf("%-15s: [FAILED] %v\n", svc, err)
+					} else {
+						log.Printf("Successfully started %s", svc)
+						fmt.Printf("%-15s: [STARTED]\n", svc)
+					}
+				}
+			} else if contains(service.AllServices, serviceName) {
+				log.Printf("Starting service %s...", serviceName)
+				if err := service.ManageService(serviceName, "start"); err != nil {
+					log.Fatalf("Failed to start service %s: %v", serviceName, err)
+				} else {
+					log.Printf("Service %s started successfully", serviceName)
+					fmt.Println("Service started successfully")
+				}
+			} else {
 				fmt.Printf("Invalid service name: %s\n", args[0])
 				fmt.Printf("Valid services are: %s\n", strings.Join(service.AllServices, ", "))
-				fmt.Printf("Or use 'all' to manage all services.\n")
 				os.Exit(1)
-			}
-			if debugMode {
-				log.Printf("Starting service %s in debug mode...", serviceName)
-				log.SetFlags(log.LstdFlags | log.Lshortfile)
-			} else {
-				log.Printf("Starting service %s...", serviceName)
-				log.SetFlags(log.LstdFlags)
-			}
-			if err := service.ManageService(serviceName, "start"); err != nil {
-				log.Fatalf("Failed to start service: %v", err)
 			}
 		},
 	}
@@ -281,26 +290,35 @@ func Execute(version string, ctx context.Context, cancel context.CancelFunc) {
 	// Stop Service Command
 	var serviceStopCmd = &cobra.Command{
 		Use:    "stop [service|all]",
-		Short:  "Stop a service (fluent-bit, zeek, osquery) or all services",
+		Short:  "Stop a service (fluent-bit, zeek, osqueryd) or all services",
 		PreRun: loadConfig,
 		Args:   cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			serviceName := strings.ToLower(args[0])
-			if !contains(validServices, serviceName) {
+			if serviceName == "all" {
+				log.Println("Stopping all services...")
+				for _, svc := range service.AllServices {
+					log.Printf("Attempting to stop %s...", svc)
+					if err := service.ManageService(svc, "stop"); err != nil {
+						log.Printf("Failed to stop %s: %v", svc, err)
+						fmt.Printf("%-15s: [FAILED] %v\n", svc, err)
+					} else {
+						log.Printf("Successfully stopped %s", svc)
+						fmt.Printf("%-15s: [STOPPED]\n", svc)
+					}
+				}
+			} else if contains(service.AllServices, serviceName) {
+				log.Printf("Stopping service %s...", serviceName)
+				if err := service.ManageService(serviceName, "stop"); err != nil {
+					log.Fatalf("Failed to stop service %s: %v", serviceName, err)
+				} else {
+					log.Printf("Service %s stopped successfully", serviceName)
+					fmt.Println("Service stopped successfully")
+				}
+			} else {
 				fmt.Printf("Invalid service name: %s\n", args[0])
 				fmt.Printf("Valid services are: %s\n", strings.Join(service.AllServices, ", "))
-				fmt.Printf("Or use 'all' to manage all services.\n")
 				os.Exit(1)
-			}
-			if debugMode {
-				log.Printf("Stopping service %s in debug mode...", serviceName)
-				log.SetFlags(log.LstdFlags | log.Lshortfile)
-			} else {
-				log.Printf("Stopping service %s...", serviceName)
-				log.SetFlags(log.LstdFlags)
-			}
-			if err := service.ManageService(serviceName, "stop"); err != nil {
-				log.Fatalf("Failed to stop service: %v", err)
 			}
 		},
 	}
@@ -308,26 +326,35 @@ func Execute(version string, ctx context.Context, cancel context.CancelFunc) {
 	// Restart Service Command
 	var serviceRestartCmd = &cobra.Command{
 		Use:    "restart [service|all]",
-		Short:  "Restart a service (fluent-bit, zeek, osquery) or all services",
+		Short:  "Restart a service (fluent-bit, zeek, osqueryd) or all services",
 		PreRun: loadConfig,
 		Args:   cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			serviceName := strings.ToLower(args[0])
-			if !contains(validServices, serviceName) {
+			if serviceName == "all" {
+				log.Println("Restarting all services...")
+				for _, svc := range service.AllServices {
+					log.Printf("Attempting to restart %s...", svc)
+					if err := service.ManageService(svc, "restart"); err != nil {
+						log.Printf("Failed to restart %s: %v", svc, err)
+						fmt.Printf("%-15s: [FAILED] %v\n", svc, err)
+					} else {
+						log.Printf("Successfully restarted %s", svc)
+						fmt.Printf("%-15s: [RESTARTED]\n", svc)
+					}
+				}
+			} else if contains(service.AllServices, serviceName) {
+				log.Printf("Restarting service %s...", serviceName)
+				if err := service.ManageService(serviceName, "restart"); err != nil {
+					log.Fatalf("Failed to restart service %s: %v", serviceName, err)
+				} else {
+					log.Printf("Service %s restarted successfully", serviceName)
+					fmt.Println("Service restarted successfully")
+				}
+			} else {
 				fmt.Printf("Invalid service name: %s\n", args[0])
 				fmt.Printf("Valid services are: %s\n", strings.Join(service.AllServices, ", "))
-				fmt.Printf("Or use 'all' to manage all services.\n")
 				os.Exit(1)
-			}
-			if debugMode {
-				log.Printf("Restarting service %s in debug mode...", serviceName)
-				log.SetFlags(log.LstdFlags | log.Lshortfile)
-			} else {
-				log.Printf("Restarting service %s...", serviceName)
-				log.SetFlags(log.LstdFlags)
-			}
-			if err := service.ManageService(serviceName, "restart"); err != nil {
-				log.Fatalf("Failed to restart service: %v", err)
 			}
 		},
 	}
@@ -335,7 +362,7 @@ func Execute(version string, ctx context.Context, cancel context.CancelFunc) {
 	// Status Service Command
 	var serviceStatusCmd = &cobra.Command{
 		Use:   "status [service|all]",
-		Short: "Get the status of a service (fluent-bit, zeek, osquery) or all services",
+		Short: "Get the status of a service (fluent-bit, zeek, osqueryd) or all services",
 		Long: `Check the status of a specific service or all managed services.
 
 Examples:
