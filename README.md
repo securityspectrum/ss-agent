@@ -20,7 +20,7 @@ GOOS=windows GOARCH=amd64 go build -o ss-agent-win.exe .
 
 For macOS:
 ```
-GOOS=darwin GOARCH=amd64 go build -o ss-agent-macos-darwin . 
+GOOS=darwin GOARCH=amd64 go build -o ss-agent-darwin . 
 chmod +x ss-agent-darwin
 ./ss-agent-darwin -verbose
 ```
