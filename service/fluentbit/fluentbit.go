@@ -66,6 +66,11 @@ func FluentBitStatus() (string, error) {
 func FluentBitStart() error {
 	switch runtime.GOOS {
 	case "linux":
+		cmdEnable := exec.Command("systemctl", "enable", "fluent-bit")
+		if _, err := cmdEnable.CombinedOutput(); err != nil {
+			return fmt.Errorf("systemctl enable failed: %v", err)
+		}
+
 		cmd := exec.Command("systemctl", "start", "fluent-bit")
 		output, err := cmd.CombinedOutput()
 		if err != nil {

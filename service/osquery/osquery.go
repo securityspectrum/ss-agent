@@ -71,16 +71,21 @@ func OsqueryStatus() (string, error) {
 func OsqueryStart() error {
 	switch runtime.GOOS {
 	case "linux":
+		cmdEnable := exec.Command("systemctl", "enable", "osqueryd")
+		if _, err := cmdEnable.CombinedOutput(); err != nil {
+			return fmt.Errorf("systemctl enable failed: %v", err)
+		}
+
 		cmd := exec.Command("systemctl", "start", "osqueryd")
 		output, err := cmd.CombinedOutput()
 		if err != nil {
 			return fmt.Errorf("systemctl start failed: %v\nOutput: %s", err, string(output))
 		}
-		fmt.Println("Osquery started successfully.")
+		fmt.Println("osqueryd started successfully.")
 		return nil
 
 	case "darwin":
-		cmd := exec.Command("sudo", "launchctl", "load", "/Library/LaunchDaemons/com.facebook.osqueryd.plist")
+		cmd := exec.Command("sudo", "launchctl", "load", "/Library/LaunchDaemons/io.osquery.agent.plist")
 		output, err := cmd.CombinedOutput()
 		if err != nil {
 			return fmt.Errorf("launchctl load failed: %v\nOutput: %s", err, string(output))
@@ -106,16 +111,21 @@ func OsqueryStart() error {
 func OsqueryStop() error {
 	switch runtime.GOOS {
 	case "linux":
+		cmdEnable := exec.Command("systemctl", "disable", "osqueryd")
+		if _, err := cmdEnable.CombinedOutput(); err != nil {
+			return fmt.Errorf("systemctl enable failed: %v", err)
+		}
+
 		cmd := exec.Command("systemctl", "stop", "osqueryd")
 		output, err := cmd.CombinedOutput()
 		if err != nil {
-			return fmt.Errorf("systemctl stop failed: %v\nOutput: %s", err, string(output))
+			return fmt.Errorf("systemctl start failed: %v\nOutput: %s", err, string(output))
 		}
 		fmt.Println("Osquery stopped successfully.")
 		return nil
 
 	case "darwin":
-		cmd := exec.Command("sudo", "launchctl", "unload", "/Library/LaunchDaemons/com.facebook.osqueryd.plist")
+		cmd := exec.Command("sudo", "launchctl", "unload", "/Library/LaunchDaemons/io.osquery.agent.plist")
 		output, err := cmd.CombinedOutput()
 		if err != nil {
 			return fmt.Errorf("launchctl unload failed: %v\nOutput: %s", err, string(output))
