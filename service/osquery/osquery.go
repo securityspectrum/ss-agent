@@ -29,7 +29,7 @@ func OsqueryStatus() (string, error) {
 		return "[UNKNOWN]", nil
 
 	case "darwin":
-		cmd := exec.Command("launchctl", "list", "io.osquery.agent.plist")
+		cmd := exec.Command("sudo", "launchctl", "list", "io.osquery.agent.plist")
 		output, err := cmd.CombinedOutput()
 
 		// Handle the specific exit code for service not found
