@@ -29,7 +29,7 @@ func OsqueryStatus() (string, error) {
 		return "[UNKNOWN]", nil
 
 	case "darwin":
-		cmd := exec.Command("launchctl", "list", "com.facebook.osqueryd")
+		cmd := exec.Command("launchctl", "list", "io.osquery.agent.plist")
 		output, err := cmd.CombinedOutput()
 
 		// Handle the specific exit code for service not found
@@ -45,7 +45,7 @@ func OsqueryStatus() (string, error) {
 			return "[FAILED]", fmt.Errorf("launchctl list failed: %v\nOutput: %s", err, string(output))
 		}
 
-		if strings.Contains(string(output), "com.facebook.osqueryd") {
+		if strings.Contains(string(output), "io.osquery.agent.plist") {
 			return "[RUNNING]", nil
 		}
 		return "[STOPPED]", nil
