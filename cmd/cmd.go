@@ -21,6 +21,7 @@ import (
 	"ss-agent/api"
 	"ss-agent/config"
 	"ss-agent/service"
+	"ss-agent/utils"
 	"ss-agent/utils/osinfo"
 )
 
@@ -31,7 +32,11 @@ var (
 	daemonMode bool   // Holds the value of the --daemon flag
 )
 
-const pidFile = "/tmp/ss-agent.pid" // Or use a directory within the user's home directory
+// const pidFile = "/tmp/ss-agent.pid" // Or use a directory within the user's home directory
+
+var (
+	pidFile string // Declared as a variable instead of a constant
+)
 
 // Define valid services including 'all'
 var validServices = []string{"fluent-bit", "zeek", "osqueryd", "all"}
@@ -63,6 +68,14 @@ func Execute(version string, ctx context.Context, cancel context.CancelFunc) {
 	var rootCmd = &cobra.Command{
 		Use:   "agent",
 		Short: "SIEM Agent",
+	}
+
+	pidFile = getPidFilePath()
+	log.Printf("PID file will be created at: %s", pidFile)
+	// Ensure the PID directory exists before trying to write to it
+	err := utils.CreateDirectoryIfNotExists(filepath.Dir(pidFile))
+	if err != nil {
+		log.Fatalf("Failed to create directory for PID file: %v", err)
 	}
 
 	// Add global flags
@@ -468,6 +481,21 @@ func cmdDaemonize() {
 
 	// Exit the parent process to complete the daemonization
 	os.Exit(0)
+}
+
+func getPidFilePath() string {
+	ostype := osinfo.GetOSType()
+	switch ostype {
+	case "windows":
+		return `C:/ProgramData/ss-agent/ss-agent.pid`
+	case "darwin": // macOS
+		return "/Library/Logs/ss-agent/ss-agent.pid"
+	case "linux":
+		return "/var/run/ss-agent.pid"
+	default:
+		tempDir := os.TempDir()
+		return filepath.Join(tempDir, "ss-agent.pid")
+	}
 }
 
 // writePidFile writes the current process PID to the pidFile

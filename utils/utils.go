@@ -3,6 +3,7 @@ package utils
 import (
 	"fmt"
 	"io/ioutil"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -34,4 +35,16 @@ func CheckProcessRunning(pid string) bool {
 	cmd := exec.Command("sh", "-c", processCmd)
 	err = cmd.Run()
 	return err == nil
+}
+
+func CreateDirectoryIfNotExists(dirPath string) error {
+	// Check if the directory exists
+	if _, err := os.Stat(dirPath); os.IsNotExist(err) {
+		// Directory does not exist, attempt to create it
+		err := os.MkdirAll(dirPath, 0755) // 0755 permissions: owner can read/write/execute, others can read/execute
+		if err != nil {
+			return fmt.Errorf("failed to create directory %s: %v", dirPath, err)
+		}
+	}
+	return nil
 }
