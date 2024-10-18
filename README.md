@@ -29,5 +29,5 @@ For Linux:
 ```
 GOOS=linux GOARCH=amd64 go build -o ss-agent-linux . 
 chmod +x ss-agent-linux
-./ss-agent-linux -verbose
+./ss-agent-linux --debug ping
 ```
